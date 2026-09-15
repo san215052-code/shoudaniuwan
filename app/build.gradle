@@ -4,42 +4,36 @@ plugins {
 
 android {
     namespace 'com.audiosplitter.status'
-    compileSdk 33
+    compileSdk 34
 
     defaultConfig {
         applicationId "com.audiosplitter.status"
-        minSdk 26
-        targetSdk 33
-        versionCode 2
-        versionName "1.1"
-    }
+        minSdk 24
+        targetSdk 34
+        versionCode 340
+        versionName "3.4"
 
-    signingConfigs {
-        debug {
-            // 使用系统默认 debug 秘钥
-        }
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         release {
-            minifyEnabled true
-            shrinkResources true
+            minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.debug
-        }
-        debug {
-            signingConfig signingConfigs.debug
         }
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
     }
 }
 
 dependencies {
+    // Android 基础兼容库
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.9.0'
-    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+    implementation 'com.google.android.material:material:1.11.0'
+
+    // 本地 HTTP API 服务依赖 (替代原生 Java HttpServer，防止 GitHub Actions 编译报错)
+    implementation 'org.nanohttpd:nanohttpd:2.3.1'
 }
