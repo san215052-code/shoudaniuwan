@@ -18,14 +18,13 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Setup Gradle
+    - name: Setup Gradle 8.4
       uses: gradle/actions/setup-gradle@v3
+      with:
+        gradle-version: '8.4'
 
-    - name: Build with Gradle
-      run: |
-        gradle wrapper
-        chmod +x gradlew
-        ./gradlew assembleRelease --stacktrace
+    - name: Build APK with Gradle 8.4
+      run: gradle assembleRelease --stacktrace
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
