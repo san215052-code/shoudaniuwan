@@ -1,9 +1,11 @@
+// 根目录 build.gradle
 buildscript {
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
+        // 使用与 Gradle 8.x 兼容的 AGP 插件版本
         classpath 'com.android.tools.build:gradle:8.2.2'
     }
 }
@@ -15,7 +17,6 @@ allprojects {
     }
 }
 
-// 适配 Gradle 8.x 的语法标准
-tasks.register('clean', Delete) {
-    delete rootProject.layout.buildDirectory
+task clean(type: Delete) {
+    delete rootProject.buildDir
 }
