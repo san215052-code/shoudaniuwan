@@ -45,6 +45,9 @@ public class MainActivity extends AppCompatActivity {
         rootLayout.addView(progressBar, progressParams);
         setContentView(rootLayout);
 
+        // 关键优化：关闭 WebView 的硬件加速，降低 GPU 耗电与发热
+        webView.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
+
         initWebViewSettings();
 
         Intent serviceIntent = new Intent(this, StatusService.class);
@@ -62,11 +65,12 @@ public class MainActivity extends AppCompatActivity {
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
-        settings.setDatabaseEnabled(true);
+        
+        // 低功耗 WebView 设置
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-        settings.setUseWideViewPort(true);
-        settings.setLoadWithOverviewMode(true);
-
+        settings.setGeolocationEnabled(false); // 关闭定位开销
+        settings.setMediaPlaybackRequiresUserGesture(true); // 禁止媒体自动播放
+        
         statusService = new StatusService();
         webView.addJavascriptInterface(statusService, "AndroidLog");
 
@@ -90,11 +94,10 @@ public class MainActivity extends AppCompatActivity {
                             + "body { font-family: -apple-system, sans-serif; text-align: center; background-color: #f7f9fc; padding: 40px 20px; color: #333; }"
                             + "h2 { color: #e53935; margin-bottom: 10px; font-size: 20px; }"
                             + "p { color: #666; font-size: 14px; line-height: 1.5; margin-bottom: 25px; }"
-                            + ".btn { background-color: #1e88e5; color: white; border: none; padding: 12px 28px; font-size: 15px; border-radius: 6px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }"
-                            + ".btn:active { background-color: #1565c0; }"
+                            + ".btn { background-color: #1e88e5; color: white; border: none; padding: 12px 28px; font-size: 15px; border-radius: 6px; font-weight: bold; cursor: pointer; }"
                             + "</style></head><body>"
                             + "<h2>控制台未启动</h2>"
-                            + "<p>无法连接到后台服务 (127.0.0.1:8080)<br>请检查后台服务进程状态，或等待服务启动完毕。</p>"
+                            + "<p>无法连接到后台服务 (127.0.0.1:8080)</p>"
                             + "<button class='btn' onclick=\"location.href='" + TARGET_URL + "'\">重新连接</button>"
                             + "</body></html>";
                     view.loadDataWithBaseURL(null, errorHtml, "text/html", "UTF-8", null);
@@ -108,6 +111,25 @@ public class MainActivity extends AppCompatActivity {
                 progressBar.setProgress(newProgress);
             }
         });
+    }
+
+    // 关键优化：切到后台时暂停 JS 定时器和网页渲染，彻底释放 CPU/GPU 资源
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (webView != null) {
+            webView.onPause();
+            webView.pauseTimers(); // 停止 JS setTimeout/setInterval
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (webView != null) {
+            webView.onResume();
+            webView.resumeTimers(); // 恢复运行
+        }
     }
 
     @Override
