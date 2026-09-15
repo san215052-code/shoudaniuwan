@@ -29,17 +29,17 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x ./gradlew
 
-    # 自动生成临时签名证书（已修正参数，支持最新版 keytool）
+    # 自动生成临时签名证书（已将密码和别名统一调整为通用匹配项）
     - name: Generate Temporary Keystore
       run: |
         keytool -genkeypair -v \
         -keystore release.keystore \
-        -alias release \
+        -alias key8 \
         -keyalg RSA \
         -keysize 2048 \
         -validity 10000 \
-        -storepass android \
-        -keypass android \
+        -storepass android123 \
+        -keypass android123 \
         -dname "CN=Android, OU=Dev, O=Android, L=Local, ST=Local, C=US"
 
     - name: Build with Gradle (Release)
