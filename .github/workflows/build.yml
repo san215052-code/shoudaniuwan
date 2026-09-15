@@ -27,28 +27,17 @@ jobs:
 
       - name: Generate Release Keystore
         run: |
-          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
-            echo "Decoding custom secret keystore..."
-            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > release.keystore
-          else
-            echo "Generating temporary release keystore..."
-            keytool -genkeypair -v \
-              -keystore release.keystore \
-              -alias key0 \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -storepass 123456 \
-              -keypass 123456 \
-              -dname "CN=AudioSplitter, OU=Dev, O=AudioSplitter, L=City, ST=State, C=CN"
-          fi
+          keytool -genkeypair -v \
+            -keystore release.keystore \
+            -alias key0 \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass 123456 \
+            -keypass 123456 \
+            -dname "CN=AudioSplitter, OU=Dev, O=AudioSplitter, L=City, ST=State, C=CN"
 
       - name: Build Signed Release APK
-        env:
-          KEYSTORE_PATH: "../release.keystore"
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || '123456' }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'key0' }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || '123456' }}
         run: gradle assembleRelease --stacktrace
 
       - name: Upload Signed APK Artifact
