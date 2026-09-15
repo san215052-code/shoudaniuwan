@@ -45,10 +45,10 @@ jobs:
             -keypass 123456 \
             -dname "CN=AudioSplitter, OU=Dev, O=AudioSplitter, L=City, ST=State, C=CN"
 
-      # 6. 使用 --info 参数打包，强制打印出详细的 Aapt2 资源报错文件路径
+      # 6. 使用 --scan 或详细参数打包，并打印出具体错误
       - name: Build Release APK
         run: |
-          ./gradlew assembleRelease --info --no-daemon --stacktrace
+          ./gradlew assembleRelease --info --no-daemon --stacktrace || (echo "=== BUILD FAILED ===" && exit 1)
 
       # 7. 上传构件
       - name: Upload Signed APK Artifact
