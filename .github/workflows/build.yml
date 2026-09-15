@@ -22,7 +22,17 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # 3. 创建签名密钥文件
+      # 3. 生成更稳定的 Gradle 7.5 包装器
+      - name: Generate Gradle Wrapper
+        run: |
+          gradle wrapper --gradle-version 7.5
+
+      # 4. 赋予 gradlew 执行权限
+      - name: Make gradlew executable
+        run: |
+          chmod +x ./gradlew
+
+      # 5. 创建签名密钥文件
       - name: Generate Release Keystore
         run: |
           keytool -genkeypair -v \
@@ -35,12 +45,12 @@ jobs:
             -keypass 123456 \
             -dname "CN=AudioSplitter, OU=Dev, O=AudioSplitter, L=City, ST=State, C=CN"
 
-      # 4. 执行 Gradle 构建（使用系统自带的 gradle 命令，避免缺少 gradlew 报错）
+      # 6. 使用 Gradle 7.5 执行打包
       - name: Build Release APK
         run: |
-          gradle assembleRelease --stacktrace
+          ./gradlew assembleRelease --stacktrace
 
-      # 5. 上传打包好的 Release APK 作为构件
+      # 7. 上传打包好的 Release APK 作为构件
       - name: Upload Signed APK Artifact
         uses: actions/upload-artifact@v4
         with:
