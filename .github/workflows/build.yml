@@ -22,7 +22,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # 3. 创建签名密钥文件 (使用 GitHub Secrets 注入的配置，或者临时生成)
+      # 3. 创建签名密钥文件
       - name: Generate Release Keystore
         run: |
           keytool -genkeypair -v \
@@ -35,11 +35,10 @@ jobs:
             -keypass 123456 \
             -dname "CN=AudioSplitter, OU=Dev, O=AudioSplitter, L=City, ST=State, C=CN"
 
-      # 4. 执行 Gradle 构建（使用项目自带的 gradlew 并输出详细日志）
+      # 4. 执行 Gradle 构建（使用系统自带的 gradle 命令，避免缺少 gradlew 报错）
       - name: Build Release APK
         run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease --stacktrace
+          gradle assembleRelease --stacktrace
 
       # 5. 上传打包好的 Release APK 作为构件
       - name: Upload Signed APK Artifact
