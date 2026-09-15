@@ -1,29 +1,27 @@
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.audiosplitter.status">
+name: Build Audio Splitter Status APK
 
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
 
-    <application
-        android:allowBackup="true"
-        android:icon="@android:drawable/ic_dialog_info"
-        android:label="音频分流控制台"
-        android:supportsRtl="true"
-        android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-        <activity
-            android:name=".MainActivity"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+    steps:
+    - uses: actions/checkout@v4
 
-        <service
-            android:name=".StatusService"
-            android:exported="false" />
+    - name: set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
 
-    </application>
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v3
 
-</manifest>
+    - name: Build with Gradle Wrapper
+      run: |
+        chmod +x gradlew
+        ./gradlew assembleRelease --stacktrace
