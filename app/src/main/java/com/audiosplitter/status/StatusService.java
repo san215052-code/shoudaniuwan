@@ -14,9 +14,11 @@ import android.os.Build;
 import android.os.IBinder;
 import androidx.core.app.NotificationCompat;
 
-import fi.iki.elonen.NanoHTTPD;
-
-import java.io.IOException;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
 
 public class StatusService extends Service {
 
@@ -25,32 +27,30 @@ public class StatusService extends Service {
     private static final String ACTION_EMERGENCY_RESET = "com.audiosplitter.ACTION_EMERGENCY_RESET";
     private static final int PORT = 8080;
 
-    private LocalHttpServer httpServer;
+    private ServerSocket serverSocket;
+    private boolean isServerRunning = false;
     private boolean isRootGranted = false;
 
     // 0: 白名单模式, 1: 黑名单模式, 2: 系统原生音频
     private int currentModeIndex = 0;
     private final String[] MODES = {"【白名单】", "【黑名单】", "【系统原生音频】"};
 
-    // 接收通知栏卡片点击及蓝牙广播
+    // 监听广播：模式切换、紧急重置、蓝牙断开
     private final BroadcastReceiver coreReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
 
             if (ACTION_TOGGLE_MODE.equals(action)) {
-                // 轮询切换模式
                 currentModeIndex = (currentModeIndex + 1) % MODES.length;
                 applyModeSelection(currentModeIndex);
 
             } else if (ACTION_EMERGENCY_RESET.equals(action)) {
-                // 点击通知栏“紧急重置”
                 currentModeIndex = 2;
                 AudioEngine.switchRoutingMode(2);
                 updateNotificationCard("音频分流：【已紧急重置】", "已强行恢复系统原生音频状态");
 
             } else if (BluetoothDevice.ACTION_ACL_DISCONNECTED.equals(action)) {
-                // 蓝牙断开连接，自动发送媒体暂停指令
                 pauseMediaPlayback();
             }
         }
@@ -58,7 +58,7 @@ public class StatusService extends Service {
 
     private void pauseMediaPlayback() {
         new Thread(() -> {
-            AudioEngine.executeRootCommand("input keyevent 127"); // KEYCODE_MEDIA_PAUSE
+            AudioEngine.executeRootCommand("input keyevent 127");
         }).start();
     }
 
@@ -68,7 +68,7 @@ public class StatusService extends Service {
         if (modeIndex == 2) {
             updateNotificationCard("音频分流：" + newMode, "已回归系统原生音频，使用手机默认路径");
         } else {
-            updateNotificationCard("音频分流：" + newMode, "点击卡片切换模式 | 127.0.0.1:8080 就绪");
+            updateNotificationCard("音频分流：" + newMode, "点击卡片切换模式 | 8080 控制台就绪");
         }
     }
 
@@ -77,7 +77,6 @@ public class StatusService extends Service {
         super.onCreate();
         createNotificationChannel();
 
-        // 注册广播接收器
         IntentFilter filter = new IntentFilter();
         filter.addAction(ACTION_TOGGLE_MODE);
         filter.addAction(ACTION_EMERGENCY_RESET);
@@ -91,7 +90,6 @@ public class StatusService extends Service {
 
         updateNotificationCard("音频分流：" + MODES[currentModeIndex], "点击卡片切换模式 | 8080 控制台启动中...");
 
-        // 异步检查 Root 状态
         new Thread(() -> {
             isRootGranted = AudioEngine.requestRoot();
             if (isRootGranted) {
@@ -101,38 +99,60 @@ public class StatusService extends Service {
             }
         }).start();
 
-        // 启动轻量级 NanoHTTPD 服务器
-        startLocalHttpServer();
+        // 启动 Android 原生 Socket 监听 8080
+        startNativeHttpServer();
     }
 
-    private void startLocalHttpServer() {
-        try {
-            httpServer = new LocalHttpServer(PORT);
-            httpServer.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+    // 使用纯原生 ServerSocket，零依赖、百分百可通过编译
+    private void startNativeHttpServer() {
+        isServerRunning = true;
+        new Thread(() -> {
+            try {
+                InetAddress localAddr = InetAddress.getByName("127.0.0.1");
+                serverSocket = new ServerSocket(PORT, 50, localAddr);
+
+                while (isServerRunning && !serverSocket.isClosed()) {
+                    Socket clientSocket = serverSocket.accept();
+                    handleClientRequest(clientSocket);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }).start();
     }
 
-    // NanoHTTPD 实现类 (绑定 127.0.0.1)
-    private class LocalHttpServer extends NanoHTTPD {
-        public LocalHttpServer(int port) {
-            super("127.0.0.1", port);
-        }
+    private void handleClientRequest(Socket client) {
+        new Thread(() -> {
+            try {
+                String json = "{"
+                        + "\"status\":\"ok\","
+                        + "\"modeIndex\":" + currentModeIndex + ","
+                        + "\"modeName\":\"" + MODES[currentModeIndex] + "\","
+                        + "\"root\":" + isRootGranted
+                        + "}";
 
-        @Override
-        public Response serve(IHTTPSession session) {
-            String json = "{"
-                    + "\"status\":\"ok\","
-                    + "\"modeIndex\":" + currentModeIndex + ","
-                    + "\"modeName\":\"" + MODES[currentModeIndex] + "\","
-                    + "\"root\":" + isRootGranted
-                    + "}";
+                byte[] body = json.getBytes("UTF-8");
 
-            Response res = newFixedLengthResponse(Response.Status.OK, "application/json; charset=UTF-8", json);
-            res.addHeader("Access-Control-Allow-Origin", "*");
-            return res;
-        }
+                OutputStream out = client.getOutputStream();
+                PrintWriter pw = new PrintWriter(out);
+
+                // 返回标准的 HTTP 响应头（支持跨域）
+                pw.println("HTTP/1.1 200 OK");
+                pw.println("Content-Type: application/json; charset=UTF-8");
+                pw.println("Content-Length: " + body.length);
+                pw.println("Access-Control-Allow-Origin: *");
+                pw.println("Connection: close");
+                pw.println();
+                pw.flush();
+
+                out.write(body);
+                out.flush();
+
+                client.close();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }).start();
     }
 
     private void updateNotificationCard(String title, String content) {
@@ -171,8 +191,13 @@ public class StatusService extends Service {
 
     @Override
     public void onDestroy() {
+        isServerRunning = false;
         try { unregisterReceiver(coreReceiver); } catch (Exception ignored) {}
-        if (httpServer != null) httpServer.stop();
+        try {
+            if (serverSocket != null && !serverSocket.isClosed()) {
+                serverSocket.close();
+            }
+        } catch (Exception ignored) {}
         super.onDestroy();
     }
 
