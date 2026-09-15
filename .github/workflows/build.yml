@@ -25,7 +25,6 @@ jobs:
         with:
           gradle-version: '8.5'
 
-      # 自动补齐 Wrapper，确保标准构建流程
       - name: Generate Gradle Wrapper
         run: gradle wrapper
 
@@ -42,7 +41,7 @@ jobs:
             -dname "CN=AudioSplitter, OU=Dev, O=AudioSplitter, L=City, ST=State, C=CN"
 
       - name: Build Signed Release APK
-        run: ./gradlew assembleRelease --stacktrace
+        run: ./gradlew assembleRelease
 
       - name: Upload Signed APK Artifact
         uses: actions/upload-artifact@v4
