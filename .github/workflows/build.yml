@@ -5,7 +5,7 @@ on:
     branches: [ "main", "master" ]
   pull_request:
     branches: [ "main", "master" ]
-  workflow_dispatch: # 支持手动点击按钮触发编译
+  workflow_dispatch:
 
 jobs:
   build:
@@ -21,7 +21,11 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle' # 启用 Gradle 缓存，避免重复下载依赖
+          cache: 'gradle'
+
+      # 核心修改：如果仓库里没有 gradlew，让它在云端自动生成一个
+      - name: Generate Gradle Wrapper
+        run: gradle wrapper --gradle-version=8.2
 
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
