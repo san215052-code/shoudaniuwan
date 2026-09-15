@@ -35,7 +35,7 @@ public class StatusService extends Service {
     private int currentModeIndex = 0;
     private final String[] MODES = {"【白名单】", "【黑名单】", "【系统原生音频】"};
 
-    // 监听广播：模式切换、紧急重置、蓝牙断开
+    // 广播接收器：处理通知栏点击与蓝牙断开事件
     private final BroadcastReceiver coreReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -57,10 +57,12 @@ public class StatusService extends Service {
         }
     };
 
+    // 蓝牙断开自动暂停播放
     private void pauseMediaPlayback() {
         execRoot("input keyevent 127");
     }
 
+    // 内置音频路由切换逻辑
     private void switchRoutingMode(int modeIndex) {
         switch (modeIndex) {
             case 0:
@@ -75,6 +77,7 @@ public class StatusService extends Service {
         }
     }
 
+    // 内置低延迟 Root 指令执行器
     private void execRoot(String command) {
         new Thread(() -> {
             Process process = null;
@@ -97,6 +100,7 @@ public class StatusService extends Service {
         }).start();
     }
 
+    // 内置 Root 检查
     private boolean checkRoot() {
         Process process = null;
         DataOutputStream os = null;
@@ -137,11 +141,8 @@ public class StatusService extends Service {
         filter.addAction(ACTION_EMERGENCY_RESET);
         filter.addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED);
 
-        if (Build.VERSION.SDK_INT >= 33) {
-            registerReceiver(coreReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
-        } else {
-            registerReceiver(coreReceiver, filter);
-        }
+        // 使用通用最兼容广播注册 API（兼容所有 SDK 版本）
+        registerReceiver(coreReceiver, filter);
 
         updateNotificationCard("音频分流：" + MODES[currentModeIndex], "点击卡片切换模式 | 8080 控制台启动中...");
 
@@ -157,6 +158,7 @@ public class StatusService extends Service {
         startNativeHttpServer();
     }
 
+    // 内置轻量级 127.0.0.1:8080 Socket 服务器
     private void startNativeHttpServer() {
         isServerRunning = true;
         new Thread(() -> {
@@ -209,8 +211,8 @@ public class StatusService extends Service {
 
     private void updateNotificationCard(String title, String content) {
         int pendingFlags = PendingIntent.FLAG_UPDATE_CURRENT;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            pendingFlags |= PendingIntent.FLAG_IMMUTABLE;
+        if (Build.VERSION.SDK_INT >= 23) { // 23 = Android 6.0
+            pendingFlags |= 0x04000000; // 对应 PendingIntent.FLAG_IMMUTABLE
         }
 
         Intent toggleIntent = new Intent(ACTION_TOGGLE_MODE);
@@ -220,21 +222,19 @@ public class StatusService extends Service {
         PendingIntent resetPendingIntent = PendingIntent.getBroadcast(this, 1, resetIntent, pendingFlags);
 
         Notification.Builder builder;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        if (Build.VERSION.SDK_INT >= 26) { // 26 = Android 8.0
             builder = new Notification.Builder(this, CHANNEL_ID);
         } else {
             builder = new Notification.Builder(this);
         }
 
-        Notification.Action resetAction = new Notification.Action.Builder(
-                android.R.drawable.ic_menu_call, "🚨 紧急重置原生", resetPendingIntent).build();
-
+        // 使用基类最原生的 addAction 方法
         Notification notification = builder
                 .setContentTitle(title)
                 .setContentText(content)
                 .setSmallIcon(android.R.drawable.ic_media_play)
                 .setContentIntent(togglePendingIntent)
-                .addAction(resetAction)
+                .addAction(android.R.drawable.ic_menu_call, "🚨 紧急重置原生", resetPendingIntent)
                 .setOngoing(true)
                 .build();
 
@@ -242,7 +242,7 @@ public class StatusService extends Service {
     }
 
     private void createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        if (Build.VERSION.SDK_INT >= 26) { // 26 = Android 8.0
             NotificationChannel channel = new NotificationChannel(
                     CHANNEL_ID, "音频分流模式控制", NotificationManager.IMPORTANCE_LOW);
             channel.setShowBadge(false);
@@ -265,4 +265,4 @@ public class StatusService extends Service {
 
     @Override
     public IBinder onBind(Intent intent) { return null; }
-}
+                }
