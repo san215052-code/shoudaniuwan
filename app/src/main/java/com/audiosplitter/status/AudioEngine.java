@@ -1,80 +1,98 @@
 package com.audiosplitter.status;
 
-import java.io.BufferedReader;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothProfile;
+
 import java.io.DataOutputStream;
-import java.io.InputStreamReader;
+import java.io.IOException;
 
 public class AudioEngine {
 
-    // 动态请求 Root 权限
+    /**
+     * 检查并请求 Root 权限 (异步检测)
+     */
     public static boolean requestRoot() {
+        Process process = null;
+        DataOutputStream os = null;
         try {
-            Process p = Runtime.getRuntime().exec("su");
-            DataOutputStream os = new DataOutputStream(p.getOutputStream());
-            BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+            process = Runtime.getRuntime().exec("su");
+            os = new DataOutputStream(process.getOutputStream());
             os.writeBytes("id\n");
             os.writeBytes("exit\n");
             os.flush();
-            boolean isRoot = false;
-            String line;
-            while ((line = reader.readLine()) != null) {
-                if (line.contains("uid=0(root)")) {
-                    isRoot = true;
-                    break;
-                }
-            }
-            p.waitFor();
-            p.destroy();
-            return isRoot;
+            int exitValue = process.waitFor();
+            return exitValue == 0;
         } catch (Exception e) {
+            e.printStackTrace();
             return false;
-        }
-    }
-
-    // 执行底层命令
-    public static String exec(String command) {
-        StringBuilder output = new StringBuilder();
-        Process p = null;
-        DataOutputStream os = null;
-        BufferedReader reader = null;
-        try {
-            p = Runtime.getRuntime().exec("su");
-            os = new DataOutputStream(p.getOutputStream());
-            reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
-            os.writeBytes(command + "\n");
-            os.writeBytes("exit\n");
-            os.flush();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                output.append(line).append("\n");
-            }
-            p.waitFor();
-        } catch (Exception e) {
-            output.append("Error: ").append(e.getMessage());
         } finally {
             try {
                 if (os != null) os.close();
-                if (reader != null) reader.close();
-                if (p != null) p.destroy();
-            } catch (Exception ignored) {}
+                if (process != null) process.destroy();
+            } catch (IOException ignored) {}
         }
-        return output.toString().trim();
     }
 
-    // [功能 2] 实时检测蓝牙 A2DP 状态
+    /**
+     * 执行低延迟 Root Shell 指令
+     */
+    public static void executeRootCommand(String command) {
+        new Thread(() -> {
+            Process process = null;
+            DataOutputStream os = null;
+            try {
+                process = Runtime.getRuntime().exec("su");
+                os = new DataOutputStream(process.getOutputStream());
+                os.writeBytes(command + "\n");
+                os.writeBytes("exit\n");
+                os.flush();
+                process.waitFor();
+            } catch (Exception e) {
+                e.printStackTrace();
+            } finally {
+                try {
+                    if (os != null) os.close();
+                    if (process != null) process.destroy();
+                } catch (IOException ignored) {}
+            }
+        }).start();
+    }
+
+    /**
+     * 切换音频路由模式
+     * 0: 白名单模式 (强制蓝牙)
+     * 1: 黑名单模式 (切回默认)
+     * 2: 系统原生音频 / 紧急重置 (完全清空路由策略)
+     */
+    public static void switchRoutingMode(int modeIndex) {
+        switch (modeIndex) {
+            case 0:
+                // 白名单：强制音频指向蓝牙设备 (FOR_MEDIA)
+                executeRootCommand("cmd audio set-force-use 1 1");
+                break;
+            case 1:
+                // 黑名单：解除强导，切回系统默认策略
+                executeRootCommand("cmd audio set-force-use 1 0");
+                break;
+            case 2:
+                // 紧急重置：重置 通信、媒体、录音 三路强制路由，恢复手机默认状态
+                executeRootCommand("cmd audio set-force-use 0 0");
+                executeRootCommand("cmd audio set-force-use 1 0");
+                executeRootCommand("cmd audio set-force-use 2 0");
+                break;
+        }
+    }
+
+    /**
+     * 检测蓝牙音频设备连接状态
+     */
     public static boolean isBluetoothConnected() {
-        String res = exec("dumpsys audio | grep -i 'A2DP' | grep -i 'connected=true'");
-        return !res.isEmpty();
-    }
-
-    // [功能 1] 开启音频分流总开关
-    public static void applyRoute() {
-        exec("cmd audio set-force-use 1 1");
-    }
-
-    // 关闭音频分流总开关
-    public static void resetRoute() {
-        exec("cmd audio set-force-use 1 0");
+        BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled()) {
+            return false;
+        }
+        int a2dpState = bluetoothAdapter.getProfileConnectionState(BluetoothProfile.A2DP);
+        int headsetState = bluetoothAdapter.getProfileConnectionState(BluetoothProfile.HEADSET);
+        return a2dpState == BluetoothProfile.STATE_CONNECTED || headsetState == BluetoothProfile.STATE_CONNECTED;
     }
 }
-
